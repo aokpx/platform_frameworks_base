@@ -30,8 +30,10 @@ import com.android.systemui.statusbar.policy.BluetoothController;
 import com.android.systemui.statusbar.policy.BrightnessController;
 import com.android.systemui.statusbar.policy.LocationController;
 import com.android.systemui.statusbar.policy.NetworkController;
+import com.android.systemui.statusbar.policy.Prefs;
 import com.android.systemui.statusbar.policy.ToggleSlider;
 
+import android.app.Activity;
 import android.app.ActivityManagerNative;
 import android.app.AlertDialog;
 import android.app.Dialog;
@@ -41,7 +43,6 @@ import android.content.BroadcastReceiver;
 import android.content.ComponentName;
 import android.content.ContentResolver;
 import android.content.Context;
-import android.content.CursorLoader;
 import android.content.DialogInterface;
 import android.content.DialogInterface.OnClickListener;
 import android.content.Intent;
@@ -90,13 +91,8 @@ import android.widget.Toast;
 import com.android.internal.telephony.PhoneConstants;
 import com.android.systemui.aokp.AokpTarget;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.File;
-import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.InputStream;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -163,10 +159,8 @@ class QuickSettings {
 
     private static final String DEFAULT_TOGGLES = "default";
 
-    public static final String FAST_CHARGE_DIR = "/sys/kernel/fast_charge";
-    public static final String FAST_CHARGE_FILE = "force_fast_charge";
-
     private int mWifiApState = WifiManager.WIFI_AP_STATE_DISABLED;
+    private int mWifiState = WifiManager.WIFI_STATE_DISABLED;
 
     private int mDataState = -1;
 
@@ -212,6 +206,7 @@ class QuickSettings {
     private long tacoSwagger = 0;
     private boolean tacoToggle = false;
     private int mTileTextSize = 12;
+    private String mFastChargePath;
 
     private HashMap<String, Integer> toggleMap;
 
@@ -278,6 +273,7 @@ class QuickSettings {
                 r.getInteger(R.integer.quick_settings_brightness_dialog_long_timeout);
         mBrightnessDialogShortTimeout =
                 r.getInteger(R.integer.quick_settings_brightness_dialog_short_timeout);
+        mFastChargePath = r.getString(com.android.internal.R.string.config_fastChargePath);
 
         IntentFilter filter = new IntentFilter();
         filter.addAction(DisplayManager.ACTION_WIFI_DISPLAY_STATUS_CHANGED);
@@ -428,7 +424,8 @@ class QuickSettings {
                             cursor.close();
                         }
                     }
-                    InputStream input = ContactsContract.Contacts.openContactPhotoInputStream(mContext.getContentResolver(), res, true);
+                    InputStream input = ContactsContract.Contacts.
+                            openContactPhotoInputStream(mContext.getContentResolver(), res, true);
                     if (input != null) {
                         rawAvatar = BitmapFactory.decodeStream(input);
                     }
@@ -643,7 +640,8 @@ class QuickSettings {
                     @Override
                     public boolean onLongClick(View v) {
                         Intent intent = new Intent("android.intent.action.MAIN");
-                        intent.setComponent(ComponentName.unflattenFromString("com.aokp.romcontrol/.ROMControlActivity"));
+                        intent.setComponent(ComponentName.
+                                unflattenFromString("com.aokp.romcontrol/.ROMControlActivity"));
                         intent.addCategory("android.intent.category.LAUNCHER");
                         startSettingsActivity(intent);
                         return true;
@@ -665,7 +663,14 @@ class QuickSettings {
                 quick.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        wifiManager.setWifiEnabled(!wifiManager.isWifiEnabled());
+                        mWifiState = wifiManager.getWifiState();
+                        if (mWifiState == WifiManager.WIFI_STATE_DISABLED
+                                || mWifiState == WifiManager.WIFI_STATE_DISABLING) {
+                            changeWifiState(true);
+                        } else {
+                            changeWifiState(false);
+                        }
+                        mHandler.postDelayed(delayedRefresh, 1000);
                     }
                 });
                 quick.setOnLongClickListener(new View.OnLongClickListener() {
@@ -699,7 +704,8 @@ class QuickSettings {
                     @Override
                     public void onClick(View v) {
                         try {
-                            mDataState = Settings.Global.getInt(mContext.getContentResolver(), Settings.Global.PREFERRED_NETWORK_MODE);
+                            mDataState = Settings.Global.getInt(mContext.getContentResolver(),
+                                    Settings.Global.PREFERRED_NETWORK_MODE);
                         } catch (SettingNotFoundException e) {
                             e.printStackTrace();
                         }
@@ -737,11 +743,13 @@ class QuickSettings {
                     @Override
                     public void onClick(View v) {
                         try {
-                            mDataState = Settings.Global.getInt(mContext.getContentResolver(), Settings.Global.PREFERRED_NETWORK_MODE);
+                            mDataState = Settings.Global.getInt(mContext.getContentResolver(),
+                                    Settings.Global.PREFERRED_NETWORK_MODE);
                         } catch (SettingNotFoundException e) {
                             e.printStackTrace();
                         }
-                        if (mDataState == PhoneConstants.NT_MODE_LTE_CDMA_EVDO || mDataState == PhoneConstants.NT_MODE_GLOBAL) {
+                        if (mDataState == PhoneConstants.NT_MODE_LTE_CDMA_EVDO
+                                || mDataState == PhoneConstants.NT_MODE_GLOBAL) {
                             tm.toggleLTE(false);
                         } else {
                             tm.toggleLTE(true);
@@ -851,14 +859,18 @@ class QuickSettings {
                 });
                 break;
             case FCHARGE_TILE:
+                if((mFastChargePath == null || mFastChargePath.isEmpty()) ||
+                        !new File(mFastChargePath).exists()) {
+                    // config not set or config set and kernel doesn't support it?
+                    break;
+                }
                 quick = (QuickSettingsTileView)
                         inflater.inflate(R.layout.quick_settings_tile, parent, false);
                 quick.setContent(R.layout.quick_settings_tile_fcharge, inflater);
                 quick.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        updateFastCharge(isFastChargeOn() ? false : true);
-                        mModel.refreshFChargeTile();
+                        setFastCharge(!Prefs.getLastFastChargeState(mContext));
                     }
                 });
                 quick.setOnLongClickListener(new View.OnLongClickListener() {
@@ -877,6 +889,7 @@ class QuickSettings {
                         tv.setTextSize(1, mTileTextSize);
                     }
                 });
+                restoreFChargeState();
                 break;
             case WIFI_TETHER_TILE:
                 quick = (QuickSettingsTileView)
@@ -886,12 +899,13 @@ class QuickSettings {
                     @Override
                     public void onClick(View v) {
                         mWifiApState = wifiManager.getWifiApState();
-                        if (mWifiApState == WifiManager.WIFI_AP_STATE_DISABLED || mWifiApState == WifiManager.WIFI_AP_STATE_DISABLING) {
-                            changeWifiState(true);
+                        if (mWifiApState == WifiManager.WIFI_AP_STATE_DISABLED
+                                || mWifiApState == WifiManager.WIFI_AP_STATE_DISABLING) {
+                            changeWifiApState(true);
                         } else {
-                            changeWifiState(false);
+                            changeWifiApState(false);
                         }
-                        mHandler.postDelayed(delayedRefresh, 1000);  
+                        mHandler.postDelayed(delayedRefresh, 1000);
                     }
                 });
                 quick.setOnLongClickListener(new View.OnLongClickListener() {
@@ -1328,7 +1342,10 @@ class QuickSettings {
 
         if (!toggles.get(0).equals("")) {
             for (String toggle : toggles) {
-                parent.addView(getTile(getToggleMap().get(toggle), parent, inflater));
+                View v = getTile(getToggleMap().get(toggle), parent, inflater);
+                if(v != null) {
+                    parent.addView(v);
+                }
             }
         }
     }
@@ -1605,34 +1622,20 @@ class QuickSettings {
         }
     };
 
-    public boolean isFastChargeOn() {
-        try {
-            File fastcharge = new File(FAST_CHARGE_DIR, FAST_CHARGE_FILE);
-            FileReader reader = new FileReader(fastcharge);
-            BufferedReader breader = new BufferedReader(reader);
-            return (breader.readLine().equals("1"));
-        } catch (IOException e) {
-            Log.e("FChargeToggle", "Couldn't read fast_charge file");
-            return false;
-        }
+    private void setFastCharge(final boolean on) {
+        Intent fastChargeIntent = new Intent("com.aokp.romcontrol.ACTION_CHANGE_FCHARGE_STATE");
+        fastChargeIntent.setPackage("com.aokp.romcontrol");
+        fastChargeIntent.putExtra("newState", on);
+        mContext.sendBroadcast(fastChargeIntent);
+        mHandler.postDelayed(new Runnable() {
+            public void run() {
+                mModel.refreshFChargeTile();
+            }
+        }, 250);
     }
 
-    public void updateFastCharge(boolean on) {
-        try {
-            File fastcharge = new File(FAST_CHARGE_DIR, FAST_CHARGE_FILE);
-            FileWriter fwriter = new FileWriter(fastcharge);
-            BufferedWriter bwriter = new BufferedWriter(fwriter);
-            bwriter.write(on ? "1" : "0");
-            bwriter.close();
-        } catch (IOException e) {
-            Log.e("FChargeToggle", "Couldn't write fast_charge file");
-        }
-
-    }
-
-    private void changeWifiState(final boolean desiredState) {
+    private void changeWifiApState(final boolean desiredState) {
         if (wifiManager == null) {
-            Log.d("WifiButton", "No wifiManager.");
             return;
         }
 
@@ -1640,11 +1643,32 @@ class QuickSettings {
             public void run() {
                 int wifiState = wifiManager.getWifiState();
                 if (desiredState
-                        && ((wifiState == WifiManager.WIFI_STATE_ENABLING) || (wifiState == WifiManager.WIFI_STATE_ENABLED))) {
+                        && ((wifiState == WifiManager.WIFI_STATE_ENABLING)
+                                || (wifiState == WifiManager.WIFI_STATE_ENABLED))) {
                     wifiManager.setWifiEnabled(false);
                 }
 
                 wifiManager.setWifiApEnabled(null, desiredState);
+                return;
+            }
+        });
+    }
+
+    private void changeWifiState(final boolean desiredState) {
+        if (wifiManager == null) {
+            return;
+        }
+
+        AsyncTask.execute(new Runnable() {
+            public void run() {
+                int wifiApState = wifiManager.getWifiApState();
+                if (desiredState
+                        && ((wifiApState == WifiManager.WIFI_AP_STATE_ENABLING)
+                                || (wifiApState == WifiManager.WIFI_AP_STATE_ENABLED))) {
+                    wifiManager.setWifiApEnabled(null, false);
+                }
+
+                wifiManager.setWifiEnabled(desiredState);
                 return;
             }
         });
@@ -1673,6 +1697,18 @@ class QuickSettings {
             mModel.refreshTorchTile();
         }
     };
+
+    private void restoreFChargeState() {
+        new AsyncTask<Void, Void, Boolean>() {
+            @Override
+            protected Boolean doInBackground(Void... params) {
+                if(Prefs.getLastFastChargeState(mContext) && !mModel.isFastChargeOn()) {
+                    setFastCharge(true);
+                }
+                return null;
+            }
+        }.execute();
+    }
 
     void updateTileTextSize(int colnum) {
         // adjust Tile Text Size based on column count
