@@ -89,7 +89,7 @@ import android.widget.TextView;
 import android.widget.Toast;
 
 import com.android.internal.telephony.PhoneConstants;
-import com.android.systemui.aokp.AokpTarget;
+import com.android.systemui.aokp.AwesomeAction;
 
 import java.io.File;
 import java.io.InputStream;
@@ -182,8 +182,6 @@ class QuickSettings {
     private ConnectivityManager mConnService;
     private NfcAdapter mNfcAdapter;
 
-    private AokpTarget mAokpTarget;
-
     private BrightnessController mBrightnessController;
     private BluetoothController mBluetoothController;
 
@@ -263,8 +261,6 @@ class QuickSettings {
         mBluetoothState = new QuickSettingsModel.BluetoothState();
         mHandler = new Handler();
 
-        mAokpTarget = new AokpTarget(mContext);
-
         Resources r = mContext.getResources();
         mBatteryLevels = (LevelListDrawable) r.getDrawable(R.drawable.qs_sys_battery);
         mChargingBatteryLevels =
@@ -289,6 +285,7 @@ class QuickSettings {
                 null, null);
 
         new SettingsObserver(new Handler()).observe();
+        new SoundObserver(new Handler()).observe();
     }
 
     void setBar(PanelBar bar) {
@@ -781,7 +778,7 @@ class QuickSettings {
                 quick.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        mAokpTarget.launchAction(mAokpTarget.ACTION_VIB);
+                        AwesomeAction.getInstance(mContext).launchAction(AwesomeAction.ACTION_VIB);
                         mModel.refreshVibrateTile();
                     }
                 });
@@ -809,7 +806,7 @@ class QuickSettings {
                 quick.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        mAokpTarget.launchAction(mAokpTarget.ACTION_SILENT);
+                        AwesomeAction.getInstance(mContext).launchAction(AwesomeAction.ACTION_SILENT);
                         mModel.refreshSilentTile();
                     }
                 });
@@ -837,7 +834,7 @@ class QuickSettings {
                 quick.setOnClickListener(new View.OnClickListener() {
                     @Override
                     public void onClick(View v) {
-                        mAokpTarget.launchAction(mAokpTarget.ACTION_TORCH);
+                        AwesomeAction.getInstance(mContext).launchAction(AwesomeAction.ACTION_TORCH);
                         mHandler.postDelayed(delayedRefresh, 1000);
                     }
                 });
@@ -1185,16 +1182,11 @@ class QuickSettings {
                         boolean gpsEnabled = Settings.Secure.isLocationProviderEnabled(
                                 mContext.getContentResolver(), LocationManager.GPS_PROVIDER);
                         TextView tv = (TextView) view.findViewById(R.id.location_textview);
-                        String newString = state.label;
-                        if ((newString == null) || (newString.equals(""))) {
-                            tv.setText(gpsEnabled ? R.string.quick_settings_gps_on_label
-                                    : R.string.quick_settings_gps_off_label);
-                            tv.setCompoundDrawablesWithIntrinsicBounds(0, gpsEnabled ?
-                                    R.drawable.ic_qs_gps_on : R.drawable.ic_qs_gps_off, 0, 0);
-                        } else {
-                            tv.setText(state.label);
-                            tv.setCompoundDrawablesWithIntrinsicBounds(0, R.drawable.ic_qs_gps_locked, 0, 0);
-                        }
+                        tv.setText(gpsEnabled
+                                ? R.string.quick_settings_gps_on_label
+                                : R.string.quick_settings_gps_off_label);
+                        tv.setCompoundDrawablesWithIntrinsicBounds(0, gpsEnabled ?
+                                R.drawable.ic_qs_gps_on : R.drawable.ic_qs_gps_off, 0, 0);
                         tv.setTextSize(1, mTileTextSize);
                     }
                 });
@@ -1761,6 +1753,27 @@ class QuickSettings {
         @Override
         public void onChange(boolean selfChange) {
             updateSettings();
+        }
+    }
+
+    class SoundObserver extends ContentObserver {
+        SoundObserver(Handler handler) {
+            super(handler);
+        }
+
+        void observe() {
+            ContentResolver resolver = mContext.getContentResolver();
+            resolver.registerContentObserver(Settings.Global
+                    .getUriFor(Settings.Global.MODE_RINGER),
+                    false, this);
+            mModel.refreshVibrateTile();
+            mModel.refreshSilentTile();
+        }
+
+        @Override
+        public void onChange(boolean selfChange) {
+            mModel.refreshVibrateTile();
+            mModel.refreshSilentTile();
         }
     }
 }
