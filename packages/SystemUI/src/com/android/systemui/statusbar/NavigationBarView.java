@@ -79,13 +79,18 @@ public class NavigationBarView extends LinearLayout {
     boolean mVertical;
     boolean mScreenOn;
 
+    private boolean mNavBarAutoHide = false;
+    private boolean isRotating = false;
+
     boolean mHidden, mLowProfile, mShowMenu;
     int mDisabledFlags = 0;
     int mNavigationIconHints = 0;
     private Drawable mBackIcon, mBackLandIcon, mBackAltIcon, mBackAltLandIcon;
     private boolean mMenuArrowKeys;
+    private boolean mColorAllIcons;
     
     public DelegateViewHelper mDelegateHelper;
+    private BaseStatusBar mBar;
 
     // workaround for LayoutTransitions leaving the nav buttons in a weird state (bug 5549288)
     final static boolean WORKAROUND_INVALID_LAYOUT = true;
@@ -184,6 +189,7 @@ public class NavigationBarView extends LinearLayout {
 
     public void setBar(BaseStatusBar phoneStatusBar) {
         mDelegateHelper.setBar(phoneStatusBar);
+        mBar = phoneStatusBar;
     }
 
     @Override
@@ -196,6 +202,9 @@ public class NavigationBarView extends LinearLayout {
 
     @Override
     public boolean onInterceptTouchEvent(MotionEvent event) {
+        if (mBar != null) {
+            mBar.onBarTouchEvent(event);
+        }
         return mDelegateHelper.onInterceptTouchEvent(event);
     }
 
@@ -293,10 +302,10 @@ public class NavigationBarView extends LinearLayout {
                     if (f.exists()) {
                         v.setImageDrawable(new BitmapDrawable(getResources(), f.getAbsolutePath()));
                     }
-                    v.setTint(false);
+                    v.setTint(mColorAllIcons);
                 } else {
                     v.setImageDrawable(AwesomeAction.getInstance(mContext).getIconImage(mClickActions[j]));
-                    v.setTint(mClickActions[j].startsWith("**"));
+                    v.setTint(mClickActions[j].startsWith("**") || mColorAllIcons);
                 }
                 addButton(navButtonLayout, v, landscape && !mLeftyMode);
                 // if we are in LeftyMode, then we want to add to end, like Portrait
@@ -536,10 +545,6 @@ public class NavigationBarView extends LinearLayout {
         setDisabledFlags(disabledFlags, false);
     }
 
-    private boolean areKeyguardHintsEnabled() {
-        return ((mDisabledFlags & View.STATUS_BAR_DISABLE_HOME) != 0) && !((mDisabledFlags & View.STATUS_BAR_DISABLE_SEARCH) != 0);
-    }
-
     private boolean isKeyguardEnabled() {
         KeyguardManager km = (KeyguardManager)mContext.getSystemService(Context.KEYGUARD_SERVICE);
         if(km == null) return false;
@@ -557,7 +562,6 @@ public class NavigationBarView extends LinearLayout {
         final boolean disableBack = ((disabledFlags & View.STATUS_BAR_DISABLE_BACK) != 0)
               && ((mNavigationIconHints & StatusBarManager.NAVIGATION_HINT_BACK_ALT) == 0);
         final boolean disableSearch = ((disabledFlags & View.STATUS_BAR_DISABLE_SEARCH) != 0);
-        final boolean keygaurdProbablyEnabled = areKeyguardHintsEnabled();
 
         if (mCurrentUIMode != 1 && SLIPPERY_WHEN_DISABLED) { // Tabletmode doesn't deal with slippery
             setSlippery(disableHome && disableRecent && disableBack && disableSearch);
@@ -585,7 +589,14 @@ public class NavigationBarView extends LinearLayout {
 
             }
         }
-        getSearchLight().setVisibility(keygaurdProbablyEnabled ? View.VISIBLE : View.GONE);
+        getSearchLight().setVisibility(isKeyguardEnabled() ? View.VISIBLE : View.GONE);
+        if (mNavBarAutoHide && !isRotating) {
+            if (isKeyguardEnabled())
+                mBar.setSearchLightOn(true);
+            else
+                mBar.setSearchLightOn(false);
+        }
+        isRotating = false;
         updateMenuArrowKeys();
     }
 
@@ -600,8 +611,13 @@ public class NavigationBarView extends LinearLayout {
             } else {
                 return;
             }
-            WindowManager wm = (WindowManager)getContext().getSystemService(Context.WINDOW_SERVICE);
-            wm.updateViewLayout(this, lp);
+            try  {
+                WindowManager wm = (WindowManager)getContext().getSystemService(Context.WINDOW_SERVICE);
+                wm.updateViewLayout(this, lp);
+            } catch (IllegalArgumentException e) {
+                // Let it go.  This should only happen when NavBar is on 'AutoHide' so the NavBar exists, but
+                // isn't attached to the window at this time.
+            }
         }
     }
 
@@ -801,6 +817,7 @@ public class NavigationBarView extends LinearLayout {
 
         // force the low profile & disabled states into compliance
         setLowProfile(mLowProfile, false, true /* force */);
+        isRotating = true;
         setDisabledFlags(mDisabledFlags, true /* force */);
         setMenuVisibility(mShowMenu, true /* force */);
         setNavigationIconHints(mNavigationIconHints, true);
@@ -947,6 +964,8 @@ public class NavigationBarView extends LinearLayout {
             resolver.registerContentObserver(
                     Settings.System.getUriFor(Settings.System.NAVIGATION_BAR_COLOR), false, this);
             resolver.registerContentObserver(
+                    Settings.System.getUriFor(Settings.System.NAVIGATION_BAR_ALLCOLOR), false, this);
+            resolver.registerContentObserver(
                     Settings.System.getUriFor(Settings.System.MENU_LOCATION), false,
                     this);
             resolver.registerContentObserver(
@@ -957,6 +976,8 @@ public class NavigationBarView extends LinearLayout {
                     this);
             resolver.registerContentObserver(Settings.System.getUriFor(
                     Settings.System.NAVIGATION_BAR_LEFTY_MODE), false, this);
+            resolver.registerContentObserver(Settings.System.getUriFor(
+                    Settings.System.NAV_HIDE_ENABLE), false, this);
             resolver.registerContentObserver(Settings.System.getUriFor(
                     Settings.System.NAVIGATION_BAR_MENU_ARROW_KEYS), false, this);
 
@@ -1012,6 +1033,8 @@ public class NavigationBarView extends LinearLayout {
                 Settings.System.MENU_LOCATION, SHOW_RIGHT_MENU);
         mNavigationBarColor = Settings.System.getInt(resolver,
                 Settings.System.NAVIGATION_BAR_COLOR, -1);
+        mColorAllIcons = Settings.System.getBoolean(resolver,
+                Settings.System.NAVIGATION_BAR_ALLCOLOR, false);
         mMenuVisbility = Settings.System.getInt(resolver,
                 Settings.System.MENU_VISIBILITY, VISIBILITY_SYSTEM);
         mMenuArrowKeys = Settings.System.getBoolean(resolver,
@@ -1020,6 +1043,8 @@ public class NavigationBarView extends LinearLayout {
                 Settings.System.CURRENT_UI_MODE,0);
         mLeftyMode = Settings.System.getBoolean(resolver,
                 Settings.System.NAVIGATION_BAR_LEFTY_MODE, false);
+        mNavBarAutoHide = Settings.System.getBoolean(resolver,
+                Settings.System.NAV_HIDE_ENABLE, false);
         mNumberOfButtons = Settings.System.getInt(resolver,
                 Settings.System.NAVIGATION_BAR_BUTTONS_QTY, 0);
         if (mNumberOfButtons == 0) {

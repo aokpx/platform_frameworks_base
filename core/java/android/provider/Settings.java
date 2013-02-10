@@ -2354,6 +2354,15 @@ public final class Settings {
          * 5 - Hide
          */
         public static final String STATUSBAR_BATTERY_ICON = "statusbar_battery_icon";
+
+        /**
+         * Control the display of the action overflow button within app UI.
+         * 0 = use system default
+         * 1 = force on
+         * @hide
+         */
+        public static final String UI_FORCE_OVERFLOW_BUTTON = "ui_force_overflow_button";
+
         /**
          * AM/PM Style for clock options
          * 0 - Normal AM/PM
@@ -2656,6 +2665,13 @@ public final class Settings {
         public static final String USER_UI_MODE = "user_ui_mode";
 
         /**
+         * This is used to change from singlepane mode forcing it to
+         * Change into multipane mode. Default is disabled.
+         * @hide
+         */
+        public static final String FORCE_DUAL_PANEL = "force_dualpanel";
+
+        /**
          * User configurable flag for determining if NavBar is enabled
          *
          * @hide
@@ -2726,6 +2742,26 @@ public final class Settings {
         /**
          * @hide
          */
+        public static final String NAV_HIDE_TIMEOUT = "nav_hide_timeout";
+
+        /**
+         * @hide
+         */
+        public static final String NAV_HIDE_ENABLE = "nav_hide_enable";
+
+        /**
+         * @hide
+         */
+        public static final String DRAG_HANDLE_WEIGHT = "drag_handle_weight";
+
+        /**
+         * @hide
+         */
+        public static final String DRAG_HANDLE_OPACITY = "drag_handle_opacity";
+
+        /**
+         * @hide
+         */
         public static final String MENU_LOCATION = "menu_location";
 
         /**
@@ -2791,6 +2827,11 @@ public final class Settings {
          * @hide
          */
         public static final String NAVIGATION_BAR_TINT = "navigation_bar_tint";
+
+        /**
+         * Option To Colorize ALL Nav Icons
+         */
+        public static final String NAVIGATION_BAR_ALLCOLOR = "navigation_bar_allcolor";
 
         /**
          * @hide
