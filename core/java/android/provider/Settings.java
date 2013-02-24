@@ -2726,6 +2726,12 @@ public final class Settings {
          */
         public static final String POWER_DIALOG_SHOW_TORCH_TOGGLE = "power_dialog_show_torch_toggle";
 
+         /**
+         * Show the Reboot on lockscreen dialog in Power menu
+         * @hide
+         */
+        public static final String POWER_DIALOG_SHOW_REBOOT_KEYGUARD = "power_dialog_show_reboot_keyguard";
+
         /**
          * If checked hide extra system bar stuff
          * ie compatmode button and extra ime switcher.
@@ -4806,6 +4812,36 @@ public final class Settings {
          */
         public static final int INCALL_POWER_BUTTON_BEHAVIOR_DEFAULT =
                 INCALL_POWER_BUTTON_BEHAVIOR_SCREEN_OFF;
+
+        /**
+         * What happens when the user presses the Home button when the
+         * phone is ringing.<br/>
+         * <b>Values:</b><br/>
+         * 1 - Nothing happens. (Default behavior)<br/>
+         * 2 - The Home button answer the current call.<br/>
+         *
+         * @hide
+         */
+        public static final String RING_HOME_BUTTON_BEHAVIOR = "ring_home_button_behavior";
+
+        /**
+         * RING_HOME_BUTTON_BEHAVIOR value for "do nothing".
+         * @hide
+         */
+        public static final int RING_HOME_BUTTON_BEHAVIOR_DO_NOTHING = 0x1;
+
+        /**
+         * RING_HOME_BUTTON_BEHAVIOR value for "answer".
+         * @hide
+         */
+        public static final int RING_HOME_BUTTON_BEHAVIOR_ANSWER = 0x2;
+
+        /**
+         * RING_HOME_BUTTON_BEHAVIOR default value.
+         * @hide
+         */
+        public static final int RING_HOME_BUTTON_BEHAVIOR_DEFAULT =
+                RING_HOME_BUTTON_BEHAVIOR_DO_NOTHING;
 
         /**
          * The current night mode that has been selected by the user.  Owned
