@@ -913,12 +913,13 @@ public final class ActivityManagerService extends ActivityManagerNative
         //public Handler() {
         //    if (localLOGV) Slog.v(TAG, "Handler started!");
         //}
+
         private boolean isRevokeEnabled() {
             return android.provider.Settings.Secure.getInt(mContext.getContentResolver(),
                     android.provider.Settings.Secure.ENABLE_PERMISSIONS_MANAGEMENT,
                     0) == 1;
         }
-		
+
         public void handleMessage(Message msg) {
             switch (msg.what) {
             case SHOW_ERROR_MSG: {
