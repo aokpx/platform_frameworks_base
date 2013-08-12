@@ -1616,6 +1616,16 @@ public class TextToSpeech {
 
     }
 
+    /**
+     * Limit of length of input string passed to speak and synthesizeToFile.
+     *
+     * @see #speak
+     * @see #synthesizeToFile
+     */
+    public static int getMaxSpeechInputLength() {
+        return 4000;
+    }
+
     private final TextToSpeechCallback mCallback = new TextToSpeechCallback();
 }
 
@@ -1649,14 +1659,5 @@ class TextToSpeechCallback extends ITextToSpeechCallback.Stub {
         if (listener != null) {
             listener.onStart(utteranceId);
         }
-    }
-    /**
-     * Limit of length of input string passed to speak and synthesizeToFile.
-     *
-     * @see #speak
-     * @see #synthesizeToFile
-     */
-    public static int getMaxSpeechInputLength() {
-        return 4000;
     }
 }
